@@ -1,5 +1,21 @@
 define([ "core/js/adapt" ], function(Adapt) {
-    var logToLaerdal = async function (scormSessionId, courseId, contentId, contentType, actionId) {
+	
+	// Method for generating session id
+	// https://stackoverflow.com/questions/105034/create-guid-uuid-in-javascript
+	function uuidv4() {
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+			var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+			return v.toString(16);
+		});
+	}
+	
+	var session = {
+		scormSessionId: uuidv4()
+	};
+	
+	// Method used to send data to custom log table
+    async function logToLaerdal(actionId, durationSeconds, additionalInfo) {
+    	 console.log(session);
          const response = await fetch("https://scorm-log.azurewebsites.net/api/scorm", {
              method: 'POST',
              mode: 'cors',
@@ -7,105 +23,66 @@ define([ "core/js/adapt" ], function(Adapt) {
              headers: {
                  'Content-Type': 'application/json'
              },
-             body: JSON.stringify({ scormSessionId, courseId, contentId, contentType, actionId })
+             body: JSON.stringify({ 
+				 scormSessionId: session.scormSessionId,
+				 classroomSessionId: session.cprId,
+				 courseId: session.courseId, 
+				 contentId: Adapt.location._currentLocation, 
+				 contentType: Adapt.location._contentType, 
+				 actionId,
+				 durationSeconds,
+				 additionalInfo
+             })
          });
          return await response.json();
     }
-    // Expose this logger to the world...
-    window.logToLeardal = logToLaerdal;
 
-	function onViewReady(view) {
-		var fields = {
-			page: location.pathname + location.search + location.hash,
-			title: view.model.get("title")
-		};
+    // Method used to parse query string parameters
+	// Borrowed from:
+	// https://stackoverflow.com/questions/901115/how-can-i-get-query-string-values-in-javascript
+	function getParams(query) {
+		if (!query) {
+			return {};
+		}
 
-		ga("set", fields);
-
-		ga("send", "pageview", { hitCallback: function() {
-			Adapt.trigger("googleAnalytics:hitCallback", _.extend(fields, {
-				hitType: "pageview"
-			}));
-		}});
+		return (/^[?#]/.test(query) ? query.slice(1) : query)
+			.split('&')
+			.reduce((params, param) => {
+				let [key, value] = param.split('=');
+				params[key] = value ? decodeURIComponent(value.replace(/\+/g, ' ')) : '';
+				return params;
+			}, {});
 	}
 
-	function onDrawerToggle() {
-		trackEvent("Interactions", "Pop-up", "Drawer");
-	}
-
-	function onDrawerTriggerCustomView($element) {
-		if ($element.hasClass("pagelevelprogress")) {
-			trackEvent("Interactions", "Pop-up", "Page Level Progress");
-		}
-		if ($element.hasClass("resources")) {
-			trackEvent("Interactions", "Pop-up", "Resources");
-		}
+	// Expose this logger to the world...
+	window.logToLeardal = logToLaerdal;
+    
+    // Triggered when all the course data is loaded AND all the models/mappings have been setup.
+    function onDataReady() {
+    	console.log("onDataReady");
+    	session.cprId = getParams(window.location.search)["cprid"];
+    	session.courseId = Adapt.course.title;
 	}
 
 	function onIsMediaPlayingChange(model, isMediaPlaying) {
-		if (isMediaPlaying) return trackEvent("Videos", "Play", model.get("title"));
+    	var action = isMediaPlaying ? "STOP" : "PLAY";
+    	var videoTitle = model.get("title");
 
 		var video = $("[data-adapt-id='" + model.get("_id") + "']").find("video")[0];
 		var duration = video && video.duration;
-
-		if (!duration) return;
-
 		var percentage = parseInt(video.currentTime / duration * 100, 10);
 
-		trackEvent("Videos", "Percentage seen", model.get("title"), percentage);
-	}
-
-	function onNotifyOpened(view) {
-		var subView = view.subView;
-		var model = subView ? subView.model : view.model;
-
-		trackEvent("Interactions", "Pop-up", model.get("title"));
-	}
-
-	function trackEvent(category, action, label, value, isNonInteraction) {
-		var event = {
-			hitType: "event",
-			eventCategory: category,
-			eventAction: action,
-			eventLabel: label,
-			hitCallback: function() {
-				Adapt.trigger("googleAnalytics:hitCallback", event);
-			}
-		};
-
-		if (_.isNumber(value)) event.eventValue = value;
-		if (isNonInteraction) event.nonInteraction = isNonInteraction;
-
-		ga("send", event);
-	}
-
-	function onHitCallback(data) {
-		Adapt.trigger("notify:push", {
-			title: new Date().toLocaleTimeString() + " Google Analytics hit sent:",
-			body: "<span>" + JSON.stringify(data, null, "\t") + "</span>",
-			_classes: "google-analytics",
-			_timeout: 2500
-		});
+		logToLaerdal(action, duration, videoTitle + " (" + percentage + " %)");
 	}
 
 	Adapt.once("app:dataReady", function() {
-		var config = Adapt.config.get("_googleAnalytics");
-
-		if (!config || !config._isEnabled) return;
-
-		$("head").append(Handlebars.templates.googleAnalytics(config));
-
 		Adapt.on({
-			"menuView:ready pageView:ready": onViewReady,
-			"navigation:toggleDrawer": onDrawerToggle,
-			"drawer:triggerCustomView": onDrawerTriggerCustomView, // plp, resources
-			"notify:opened": onNotifyOpened,
-			"googleAnalytics:trackEvent": trackEvent
+			"app:dataReady": onDataReady,
+			"menuView:ready pageView:ready": logToLaerdal,
+			"navigation:toggleDrawer": logToLaerdal,
+			"drawer:triggerCustomView": logToLaerdal, // plp, resources
+			"notify:opened": logToLaerdal
 		});
-
-		if (config._isDebugMode) {
-			Adapt.on("googleAnalytics:hitCallback", onHitCallback);
-		}
 
 		Adapt.components.where({ _component: "media" }).forEach(function(model) {
 			model.on("change:_isMediaPlaying", onIsMediaPlayingChange);
