@@ -69,8 +69,12 @@ define(["core/js/adapt"], function (Adapt) {
         var videoTitle = model.get("title");
 
         var video = $("[data-adapt-id='" + model.get("_id") + "']").find("video")[0];
-        var duration = video && video.duration;
-        var percentage = parseInt(video.currentTime / duration * 100, 10);
+        var duration = 0;
+        var percentage = 0;
+        if (video) {
+            duration = video.duration;
+            percentage = parseInt(video.currentTime / duration * 100, 10);
+        }
 
         logToLaerdal(action, duration, videoTitle + " (" + percentage + " %)");
     }
