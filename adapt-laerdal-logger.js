@@ -10,11 +10,12 @@ define(["core/js/adapt"], function (Adapt) {
     }
 
     var session = {
-        scormSessionId: uuidv4()
+        scormSessionId: uuidv4(),
+        cprId: getParams(window.location.search)["cprid"]
     };
 
     // Method used to send data to custom log table
-    async function logToLaerdal(actionId, durationSeconds, additionalInfo) {
+    async function logToLaerdal(contentId, contentType, actionId, durationSeconds, additionalInfo) {
         console.log(session);
         const response = await fetch("https://scorm-log.azurewebsites.net/api/scorm", {
             method: 'POST',
@@ -27,14 +28,26 @@ define(["core/js/adapt"], function (Adapt) {
                 scormSessionId: session.scormSessionId,
                 classroomSessionId: session.cprId,
                 courseId: session.courseId,
-                contentId: Adapt.location._currentLocation,
-                contentType: Adapt.location._contentType,
+                contentId: contentId,
+                contentType: contentType,
                 actionId,
                 durationSeconds,
                 additionalInfo
             })
         });
         return await response.json();
+    }
+    
+    function logAdaptEvent(view) {
+        if (!session.courseId) {
+            // If there isnt a course id yet, set it here
+            session.courseId = Adapt.course.attributes.title;
+        }
+        var contentId = view.model.get("title");
+        var contentType = view.model.get("_type");
+        var duration = view.model.get("duration");
+        
+        logToLaerdal(contentId, contentType, "VIEW", duration);
     }
 
     // Method used to parse query string parameters
@@ -59,14 +72,14 @@ define(["core/js/adapt"], function (Adapt) {
 
     // Triggered when all the course data is loaded AND all the models/mappings have been setup.
     function onDataReady() {
+        // Not called ?
         console.log("onDataReady");
         session.cprId = getParams(window.location.search)["cprid"];
-        session.courseId = Adapt.course.title;
+        session.courseId = Adapt.course.attributes.title;
     }
 
     function onIsMediaPlayingChange(model, isMediaPlaying) {
         var action = isMediaPlaying ? "STOP" : "PLAY";
-        var videoTitle = model.get("title");
 
         var video = $("[data-adapt-id='" + model.get("_id") + "']").find("video")[0];
         var duration = 0;
@@ -75,17 +88,16 @@ define(["core/js/adapt"], function (Adapt) {
             duration = video.duration;
             percentage = parseInt(video.currentTime / duration * 100, 10);
         }
-
-        logToLaerdal(action, duration, videoTitle + " (" + percentage + " %)");
+        logToLaerdal(model.get("title"), model.get("_type"), action, duration,percentage + " %");
     }
 
     Adapt.once("app:dataReady", function () {
         Adapt.on({
             "app:dataReady": onDataReady,
-            "menuView:ready pageView:ready": logToLaerdal,
-            "navigation:toggleDrawer": logToLaerdal,
-            "drawer:triggerCustomView": logToLaerdal, // plp, resources
-            "notify:opened": logToLaerdal
+            "menuView:ready pageView:ready": logAdaptEvent,
+            "navigation:toggleDrawer": logAdaptEvent,
+            "drawer:triggerCustomView": logAdaptEvent,
+            "notify:opened": logAdaptEvent
         });
 
         Adapt.components.where({_component: "media"}).forEach(function (model) {
