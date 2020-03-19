@@ -44,6 +44,11 @@ define(["core/js/adapt"], function (Adapt) {
     if (district) {
         logToLaerdal("districtSelected", "action", district, 0);
     }
+    // If there was a "testing" parameter, use it
+    var testing = localStorage.getItem("testing");
+    if (testing) {
+        logToLaerdal("testing", "action", testing + "", 0);
+    } 
     
     function logAdaptEvent(view) {
         if (!session.courseId) {
