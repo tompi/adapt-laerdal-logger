@@ -52,9 +52,8 @@ define(["core/js/adapt"], function (Adapt) {
         }
         var contentId = view.model.get("title");
         var contentType = view.model.get("_type");
-        var duration = view.model.get("duration");
         
-        logToLaerdal(contentId, contentType, "VIEW", duration);
+        logToLaerdal(contentId, contentType, "VIEW");
     }
 
     // Method used to parse query string parameters
