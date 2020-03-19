@@ -38,6 +38,13 @@ define(["core/js/adapt"], function (Adapt) {
         return await response.json();
     }
     
+    // If we have a "district" selected in local storage, log it
+    // so we can map session to district
+    var district = localStorage.getItem("district");
+    if (district) {
+        logToLaerdal("districtSelected", "action", district, 0);
+    }
+    
     function logAdaptEvent(view) {
         if (!session.courseId) {
             // If there isnt a course id yet, set it here
