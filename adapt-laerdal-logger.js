@@ -42,14 +42,19 @@ define(["core/js/adapt"], function (Adapt) {
     // so we can map session to district
     var district = localStorage.getItem("district");
     if (district) {
-        logToLaerdal("districtSelected", "action", district, 0);
+        logToLaerdal("districtSelected", "action", district + "", 0);
     }
-    // If there was a "testing" parameter, use it
+    // If there was a "testing" parameter, log it
     var testing = localStorage.getItem("testing");
     if (testing) {
         logToLaerdal("testing", "action", testing + "", 0);
-    } 
-    
+    }
+    // If there was a "country" parameter, log it
+    var country = localStorage.getItem("country");
+    if (country) {
+        logToLaerdal("country", "action", country + "", 0);
+    }
+
     function logAdaptEvent(view) {
         if (!session.courseId) {
             // If there isnt a course id yet, set it here
@@ -90,7 +95,7 @@ define(["core/js/adapt"], function (Adapt) {
     }
 
     function onIsMediaPlayingChange(model, isMediaPlaying) {
-        var action = isMediaPlaying ? "STOP" : "PLAY";
+        var action = isMediaPlaying ? "PLAY" : "STOP";
 
         var video = $("[data-adapt-id='" + model.get("_id") + "']").find("video")[0];
         var duration = 0;
